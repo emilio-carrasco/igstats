@@ -5,6 +5,8 @@ from selenium.webdriver.common.keys import Keys
 from dotenv import load_dotenv
 from bs4 import BeautifulSoup
 import os
+import pandas as pd
+
 
 def abrir_chrome(time=2):
     sleep(time)
@@ -16,36 +18,25 @@ def abrir_chrome(time=2):
     aceptar_cookies = browser.find_element_by_xpath('/html/body/div[3]/div/div/button[1]')
     aceptar_cookies.click()
     return browser
-"""
-def ig_login(driver, time=2):
-    
-    sleep(time)
-    load_dotenv()    
-    usuario = os.getenv("usuario")
-    contrasena = os.getenv("contrasena")
 
-    #driver.find_element_by_xpath("//*[@id="loginForm"]/div/div[1]/div/label/input").send_keys(usuario)
-    driver.find_element_by_xpath("//*[@id="loginForm"]/div/div[2]/div/label/input").send_keys(contrasena)
-    driver.find_element_by_xpath("//*[@id="loginForm"]/div/div[3]/button/div").click()
-"""
 def instagram_login(driver, time = 5):
     """
     Login to Instagram using username and password.
     """
-    
 
     load_dotenv()    
     usuario = os.getenv("usuario")
     contrasena = os.getenv("contrasena")
-    sleep(time)
-    driver.find_element_by_xpath("/html/body/div[3]/div/div/button[1]").click()
+    try:
+        sleep(time)
+        driver.find_element_by_xpath("/html/body/div[3]/div/div/button[1]").click()
+    except:
+        pass
 
     sleep(time)
-    usr = driver.find_element_by_name("username")
-    usr.send_keys(usuario)
-    password = driver.find_element_by_name("password")
-    password.send_keys(contrasena)
-    password.send_keys(Keys.RETURN)
+    driver.find_element_by_xpath("//*[@id="loginForm"]/div/div[1]/div/label/input").send_keys(usuario)
+    driver.find_element_by_xpath("//*[@id="loginForm"]/div/div[2]/div/label/input").send_keys(contrasena)
+    driver.find_element_by_xpath("//*[@id="loginForm"]/div/div[3]").Click()
     return driver
 
 
@@ -98,37 +89,86 @@ def get_images(driver):
     return images
 
 def get_posts(driver, target):
-    page_source = driver.page_source
+    page_source = driver
     soup = BeautifulSoup(page_source, "html.parser")
     body = soup.find('body')
     enlaces= [link.get("href") for link in body.find_all('a')]
     posts = list(filter(lambda x: x[0:3]=='/p/',enlaces))
-    return ['https://www.instagram.com/' + target + link for link in posts]
+    return [page_source[:-1] + link for link in posts]
 
-def get_likes(driver, time = 2):
+def get_likers(url, time = 2):
+    driver = webdriver.Chrome()
+    driver.get(url)
     sleep(time)
     driver.find_element_by_xpath("/html/body/div[1]/section/main/div/div[1]/article/div[3]/section[2]/div/div[2]/a").click()
     sleep(time)
     
     users=[]
+    match = False
+    while match==False:
+        lastHeight = height
 
-    while True:
-        elements = driver.find_elements_by_xpath("//*[@id]/div/span/a")
+        # step 1
+        elements = driver.find_elements_by_xpath("//*[@id]/div/a")
 
+        # step 2
         for element in elements:
             if element.get_attribute('title') not in users:
                 users.append(element.get_attribute('title'))
 
-        # Scroll down to bottom
-        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+        # step 3
+        driver.execute_script("return arguments[0].scrollIntoView();", elements[-1])
+        time.sleep(1)
 
-        # Wait to load page
-        sleep(time)
+        # step 4
+        height = driver.find_element_by_xpath("/html/body/div[3]/div/div[2]/div/div").value_of_css_property("padding-top")
+        if lastHeight==height:
+            match = True
 
-        # Calculate new scroll height and compare with last scroll height
-        new_height = driver.execute_script("return document.body.scrollHeight")
-        if new_height == last_height:
-            break
-        last_height = new_height
+    return users
+
+def post_likes2pandas(posts):
+    df_likers=pd.DataFrame()
+    for p in posts:
+        likers = get_likers(p)
+        df=pd.DataFrame(likers,columns=['likers'])
+        df['post'] = p
+        df_likers=pd.concat([df_likers,df])
+    return df_likers    
+
+
+def get_comments(url, time = 2):
+    driver = webdriver.Chrome()
+    driver.get(url)
+    sleep(time)
+    #driver.find_element_by_xpath("/html/body/div[1]/section/main/div/div[1]/article/div[3]/section[2]/div/div[2]/a").click()
+    elementos = driver.find_elements_by_xpath("//*[@id]/div/a")
+    comentarios=[]
+    for element in elements:
+            if element.get_attribute('title') not in users:
+                users.append(element.get_attribute('title'))
+    sleep(time)
+    
+    users=[]
+    match = False
+    while match==False:
+        lastHeight = height
+
+        # step 1
+        elements = driver.find_elements_by_xpath("//*[@id]/div/a")
+
+        # step 2
+        for element in elements:
+            if element.get_attribute('title') not in users:
+                users.append(element.get_attribute('title'))
+
+        # step 3
+        driver.execute_script("return arguments[0].scrollIntoView();", elements[-1])
+        time.sleep(1)
+
+        # step 4
+        height = driver.find_element_by_xpath("/html/body/div[3]/div/div[2]/div/div").value_of_css_property("padding-top")
+        if lastHeight==height:
+            match = True
 
     return users
